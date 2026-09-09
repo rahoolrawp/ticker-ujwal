@@ -13,5 +13,5 @@ EMI turns interest not saved into slower principal reduction.
 ```sh
 node --test          # the interest maths
 node validate.mjs    # check data.json
-python3 -m http.server 8000
+node server.mjs      # then open http://localhost:8000
 ```
