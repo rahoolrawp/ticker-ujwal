@@ -54,6 +54,12 @@ if (!path) {
       failed++; continue;
     }
     if (seen.has(p.slug)) { console.error(`FAIL  people.json: duplicate slug ${p.slug}`); failed++; continue; }
+    // "public" decides whether this person's ledger is copied to a public repo,
+    // so it must be an explicit boolean -- never absent and quietly falsy.
+    if (typeof p.public !== 'boolean') {
+      console.error(`FAIL  people.json: ${p.slug} needs "public": true or false`);
+      failed++; continue;
+    }
     seen.add(p.slug);
     if (!existsSync(`${p.slug}/index.html`)) {
       console.error(`FAIL  ${p.slug}/index.html is missing, so ${p.name}'s page would 404`);
