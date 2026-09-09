@@ -23,5 +23,11 @@
   "tenureMonths": null,
   "rateChanges": [],
   "payments": [],
-  "advances": []
+  "advances": [
+    {
+      "date": "2026-09-09",
+      "amount": 44227,
+      "note": "lent a second amount"
+    }
+  ]
 }
