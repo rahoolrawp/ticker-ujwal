@@ -92,6 +92,7 @@ function newState(data) {
     cycleAccrual: 0,                     // this month's accrual so far, exact paise
     outstandingCharges: 0,               // penal/other charges unpaid, integer paise
     credit: 0,                           // overpayment
+    totalLent: toPaise(data.principal),  // opening amount plus later advances
     paidTotal: 0, paidInterest: 0, paidPrincipal: 0, paidCharges: 0,
     interestCharged: 0,                  // lifetime interest debited
     cycleStartPrincipal: toPaise(data.principal), // for monthly-rest lenders
@@ -152,6 +153,7 @@ function appropriate(st, paise) {
  * The day's interest is credited at 00:00 tomorrow, so a figure shown today
  * covers interest through last night.
  */
+// `events(iso, day)` returns { payments, charges, advances } for that day.
 export function runDays(st, ctx, fromDay, toDay, events) {
   for (let day = fromDay; day <= toDay; day++) {
     const iso = isoFromDay(day);
@@ -187,6 +189,18 @@ export function runDays(st, ctx, fromDay, toDay, events) {
     }
 
     const ev = events(iso, day);
+
+    // 3b. Further money lent today. It joins the principal and starts earning
+    //     interest from tomorrow, exactly as the opening amount did.
+    for (const adv of ev.advances) {
+      const paise = toPaise(adv.amount);
+      st.principal += paise;
+      st.totalLent += paise;
+      ctx.ledger.push({
+        iso, kind: 'advance', amount: paise, note: adv.note || '',
+        principalAfter: st.principal, dueAfter: amountDue(st),
+      });
+    }
 
     // 4. Charges raised today. These never accrue interest (RBI, Aug 2023).
     for (const c of ev.charges) {
@@ -250,6 +264,7 @@ export function computeLoan(data, asOfIso) {
   const st = newState(data);
   const payments = groupByDay(normalizeEntries(data.payments, asOfIso));
   const charges = groupByDay(normalizeEntries(data.charges, asOfIso));
+  const advances = groupByDay(normalizeEntries(data.advances, asOfIso));
 
   const startDay = ctx.startDay;
   const endDay = dayNum(asOfIso);
@@ -258,16 +273,28 @@ export function computeLoan(data, asOfIso) {
     runDays(st, ctx, startDay, endDay, (iso) => ({
       payments: payments.get(iso) || [],
       charges: charges.get(iso) || [],
+      advances: advances.get(iso) || [],
     }));
     ctx.samples.push({ iso: asOfIso, principal: st.principal, due: amountDue(st), interestCharged: st.interestCharged });
   }
 
+  // Entries dated after today have not happened yet, so they take no part in
+  // the arithmetic -- but they must still be visible, or a mistyped year looks
+  // exactly like a broken page.
+  const future = [
+    ...normalizeEntries(data.payments, asOfIso).map((p) => ({ ...p, kind: 'payment' })),
+    ...normalizeEntries(data.charges, asOfIso).map((c) => ({ ...c, kind: 'charge' })),
+    ...normalizeEntries(data.advances, asOfIso).map((a) => ({ ...a, kind: 'advance' })),
+  ].filter((e) => dayNum(e.date) > endDay).sort((a, b) => (a.date < b.date ? -1 : 1));
+
   const accrued = st.chargedInterest + Math.round(st.cycleAccrual);
   return {
+    future,
     asOf: asOfIso,
     notStarted: endDay < startDay,
     daysElapsed: Math.max(0, endDay - startDay + 1),
     principal: st.principal,
+    totalLent: st.totalLent,
     accruedInterest: accrued,
     chargedInterest: st.chargedInterest,
     uncharged: Math.round(st.cycleAccrual),
@@ -326,9 +353,9 @@ export function projectPayoff(data, result, { maxYears = 50 } = {}) {
       if (amountDue(st) > 0 && day >= firstEmiDay && isMonthDay(iso, emi.dayOfMonth ?? ctx.chargeDay)) {
         installments++;
         // Never collect more than the loan owes on the final installment.
-        return { payments: [{ amount: Math.min(emiPaise, amountDue(st)) / 100, synthetic: true, note: 'projected EMI' }], charges: [] };
+        return { payments: [{ amount: Math.min(emiPaise, amountDue(st)) / 100, synthetic: true, note: 'projected EMI' }], charges: [], advances: [] };
       }
-      return { payments: [], charges: [] };
+      return { payments: [], charges: [], advances: [] };
     });
     if (amountDue(st) === 0) { stop = day; break; }
   }
@@ -354,7 +381,7 @@ export function projectBalance(data, result, { months = 24 } = {}) {
   ctx.ledger = []; ctx.samples = [];
   const from = dayNum(result.asOf) + 1;
   const to = from + Math.round(months * 30.44);
-  runDays(st, ctx, from, to, () => ({ payments: [], charges: [] }));
+  runDays(st, ctx, from, to, () => ({ payments: [], charges: [], advances: [] }));
   return { samples: ctx.samples, endIso: isoFromDay(to), endAmount: amountDue(st) };
 }
 

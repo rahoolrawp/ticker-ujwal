@@ -22,5 +22,6 @@
   "emi": null,
   "tenureMonths": null,
   "rateChanges": [],
-  "payments": []
+  "payments": [],
+  "advances": []
 }

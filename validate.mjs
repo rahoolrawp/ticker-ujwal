@@ -132,6 +132,7 @@ const checkDated = (name, arr, extra = () => {}) => {
 
 checkDated('payments', data.payments, (at, it) => num(`${at}.amount`, it.amount, { min: 0.01 }));
 checkDated('charges', data.charges, (at, it) => num(`${at}.amount`, it.amount, { min: 0.01 }));
+checkDated('advances', data.advances, (at, it) => num(`${at}.amount`, it.amount, { min: 0.01 }));
 checkDated('rateChanges', data.rateChanges, (at, it) => {
   num(`${at}.annualRatePercent`, it.annualRatePercent, { min: 0, max: 100 });
 });

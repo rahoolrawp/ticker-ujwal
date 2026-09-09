@@ -193,7 +193,9 @@ function renderTiles(r, d, proj) {
   t.innerHTML = '';
   t.append(
     tile(r.capitalizing ? 'Principal outstanding' : 'Outstanding principal', formatINR(r.principal, { decimals: 0 }),
-      r.totals.principal > 0 ? `${formatINR(r.totals.principal, { decimals: 0 })} repaid so far` : 'no principal repaid yet'),
+      r.totalLent > toPaiseSafe(d.principal)
+        ? `${formatINR(r.totalLent, { decimals: 0 })} lent in total`
+        : (r.totals.principal > 0 ? `${formatINR(r.totals.principal, { decimals: 0 })} repaid so far` : 'no principal repaid yet')),
     tile(r.capitalizing ? 'Interest added' : 'Interest accrued', formatINR(r.accruedInterest),
       interestSub(r)),
     tile('Cost per day', formatINR(r.dailyInterest),
@@ -475,9 +477,11 @@ function renderRates(d, r) {
 }
 
 function renderLedger(r, d) {
-  const rows = r.ledger.filter((l) => l.kind === 'payment' || l.kind === 'charge').reverse();
+  const rows = r.ledger.filter((l) => ['payment', 'charge', 'advance'].includes(l.kind)).reverse();
+  const future = r.future || [];
   const note = $('ledger-note');
-  if (!rows.length) {
+
+  if (!rows.length && !future.length) {
     $('ledger').innerHTML = '';
     note.innerHTML =
       'No payments recorded yet. Add an entry to the <code>payments</code> array in <code>data.json</code> ' +
@@ -488,7 +492,13 @@ function renderLedger(r, d) {
   // row would carry a column of zeroes. When they do exist it is required, or
   // the row's parts would not sum to the amount paid.
   const anyCharges = rows.some((l) => l.kind === 'charge' || l.toCharges > 0);
-  note.innerHTML = `Interest debits are posted on the ${ordinal(d.interestChargeDay || 1)} of each month. ` +
+  const futureNote = future.length
+    ? `<strong>${future.length} entr${future.length === 1 ? 'y is' : 'ies are'} dated after today (${formatDate(future[0].date)}` +
+      `${future.length > 1 ? ' onwards' : ''}) and count${future.length === 1 ? 's' : ''} for nothing yet.</strong> ` +
+      'If that was not deliberate, check the year. '
+    : '';
+  note.innerHTML = futureNote +
+    `Interest debits are posted on the ${ordinal(d.interestChargeDay || 1)} of each month. ` +
     'Each payment clears charges, then interest, then principal.' +
     (rows.some((l) => l.undated)
       ? ' An entry marked <span class="pill bad">no date</span> is missing its <code>date</code> field and is being counted as today\'s. ' +
@@ -496,9 +506,26 @@ function renderLedger(r, d) {
       : '');
 
   const head = ['Date', 'Paid', ...(anyCharges ? ['To charges'] : []), 'To interest', 'To principal', 'Principal after', 'Note'];
+  const span = anyCharges ? 4 : 3;
+
+  // Future-dated entries sit at the top, greyed, counting for nothing.
+  const futureRows = future.slice().reverse().map((f) =>
+    `<tr class="projected"><td>${formatDate(f.date)} <span class="pill bad">not yet</span></td>` +
+    `<td class="num">${formatINR(toPaiseSafe(f.amount))}</td>` +
+    `<td class="dim" colspan="${span}">${f.kind === 'advance' ? 'further lending' : 'payment'} dated in the future &mdash; not counted</td>` +
+    `<td class="dim">${escapeHtml(f.note || '')}</td></tr>`).join('');
+
   $('ledger').innerHTML =
     `<thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>` +
+    futureRows +
     rows.map((l) => {
+      if (l.kind === 'advance') {
+        return `<tr><td>${formatDate(l.iso)}</td>` +
+          `<td class="num">+${formatINR(l.amount)}</td>` +
+          `<td class="dim" colspan="${anyCharges ? 3 : 2}">further amount lent</td>` +
+          `<td class="num dim">${formatINR(l.principalAfter, { decimals: 0 })}</td>` +
+          `<td class="dim">${escapeHtml(l.note || '')}</td></tr>`;
+      }
       if (l.kind === 'charge') {
         return `<tr><td>${formatDate(l.iso)}</td><td class="num">${formatINR(l.amount)}</td>` +
           `<td class="dim num" colspan="${anyCharges ? 4 : 3}">charge raised</td>` +

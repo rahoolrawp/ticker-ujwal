@@ -286,3 +286,61 @@ test('projectBalance carries an unpaid balance forward', () => {
   assert.ok(p.samples.length >= 11);
   assert.ok(p.samples.every((s) => s.due >= 27500000));
 });
+
+test('a payment dated in the future is excluded but reported, not silently dropped', () => {
+  const d = base({ payments: [{ date: '2027-08-15', amount: 5000, note: 'mistyped year' }] });
+  const r = computeLoan(d, '2026-10-10');
+  assert.equal(r.ledger.filter((l) => l.kind === 'payment').length, 0, 'must not affect the balance');
+  assert.equal(r.future.length, 1, 'but must be surfaced');
+  assert.equal(r.future[0].date, '2027-08-15');
+  assert.equal(r.future[0].kind, 'payment');
+  // Once that date arrives it counts normally.
+  assert.equal(computeLoan(d, '2027-08-15').ledger.filter((l) => l.kind === 'payment').length, 1);
+  assert.equal(computeLoan(d, '2027-08-15').future.length, 0);
+});
+
+// --- lending more later ----------------------------------------------------
+
+test('a later advance joins the principal and earns interest from that day', () => {
+  const withAdvance = lent({ advances: [{ date: '2026-10-09', amount: 100000, note: 'second loan' }] });
+  const before = computeLoan(withAdvance, '2026-10-08');
+  const after = computeLoan(withAdvance, '2026-10-09');
+  assert.equal(before.principal, toPaise(275000), 'not counted before its date');
+  assert.equal(after.principal, toPaise(375000), 'counted on the day');
+  assert.equal(after.totalLent, toPaise(375000));
+  // No interest on the advance on the day it is handed over, exactly like the
+  // opening amount on the start date.
+  const dailyBefore = before.dailyInterest;
+  assert.ok(after.dailyInterest > dailyBefore * 1.3, 'the daily cost jumps once it is in');
+});
+
+test('an advance is recorded in the ledger, distinct from a repayment', () => {
+  const d = lent({ advances: [{ date: '2026-10-09', amount: 100000, note: 'second loan' }] });
+  const row = computeLoan(d, '2026-10-10').ledger.find((l) => l.kind === 'advance');
+  assert.equal(row.amount, toPaise(100000));
+  assert.equal(row.principalAfter, toPaise(375000));
+});
+
+test('interest before an advance is unaffected by it', () => {
+  const plain = computeLoan(lent(), '2026-10-08');
+  const withAdv = computeLoan(lent({ advances: [{ date: '2026-10-09', amount: 100000 }] }), '2026-10-08');
+  assert.equal(withAdv.accruedInterest, plain.accruedInterest);
+});
+
+test('a repayment after an advance pays down the combined balance', () => {
+  const d = lent({
+    advances: [{ date: '2026-10-09', amount: 100000, note: 'second loan' }],
+    payments: [{ date: '2026-11-10', amount: 50000, note: 'repayment' }],
+  });
+  const r = computeLoan(d, '2026-11-10');
+  const pay = r.ledger.find((l) => l.kind === 'payment');
+  assert.ok(pay.toInterest > 0 && pay.toPrincipal > 0);
+  assert.equal(r.totalLent, toPaise(375000));
+  assert.ok(r.principal < toPaise(375000));
+});
+
+test('a future-dated advance is surfaced, not counted', () => {
+  const r = computeLoan(lent({ advances: [{ date: '2027-01-01', amount: 50000 }] }), '2026-10-10');
+  assert.equal(r.principal, toPaise(275000));
+  assert.equal(r.future.filter((f) => f.kind === 'advance').length, 1);
+});
