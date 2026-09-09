@@ -1,7 +1,7 @@
 import {
   computeLoan, projectPayoff, projectBalance, emiFor, todayIso, secondsToMidnight,
   formatINR, formatDate, dayNum, isoFromDay, isMonthDay,
-} from './loan.js';
+} from './loan.js?v=400bcb1e6d';
 
 // The page's markup lives here, not in the HTML files, so every person's page
 // is byte-identical and there is only one copy to change.
