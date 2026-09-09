@@ -1,0 +1,26 @@
+{
+  "label": "Money lent to Ujwal",
+  "counterparty": "Ujwal",
+  "currency": "INR",
+  "timezone": "Asia/Kolkata",
+  "principal": 275000,
+  "startDate": "2026-09-09",
+  "annualRatePercent": 7.4,
+  "dayCountBasis": 365,
+  "restMethod": "daily",
+  "interestChargeDay": 10,
+  "capitalize": "monthly",
+  "roundMonthlyInterest": false,
+  "context": {
+    "note": "This money would otherwise have gone into the home loan as a part prepayment. The rate is the home loan rate, so the balance here is exactly what lending it to Ujwal costs in extra home-loan interest.",
+    "homeLoan": {
+      "principal": 7500000,
+      "annualRatePercent": 7.4,
+      "tenureYears": 30
+    }
+  },
+  "emi": null,
+  "tenureMonths": null,
+  "rateChanges": [],
+  "payments": []
+}
