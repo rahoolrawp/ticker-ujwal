@@ -1,6 +1,6 @@
 // A zero-dependency static server, so the site can be viewed locally or in a
 // Codespace without installing anything.
-//   node serve.mjs        -> http://localhost:8000
+//   node server.mjs      -> http://localhost:8000
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
