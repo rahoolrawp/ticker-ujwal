@@ -1,6 +1,7 @@
-// A zero-dependency static server, so the site can be viewed locally or in a
-// without installing anything.
-//   node server.mjs      -> http://localhost:8000
+// A zero-dependency static server, so the site can be viewed locally without
+// installing anything.
+//   npm start            -> http://localhost:8000
+//   node server.mjs      -> the same, but serves the directory you are in
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
